@@ -340,7 +340,8 @@ impl SearchKind {
         vector_len: Option<usize>,
         route: Route,
     ) -> Result<(String, Arc<Embedder>, bool), ResponseError> {
-        let embedder_configs = index.embedding_configs(&index.read_txn()?)?;
+        let rtxn = index.read_txn()?;
+        let embedder_configs = index.embedding_configs(&rtxn)?;
         let embedders = index_scheduler.embedders(index_uid, embedder_configs)?;
 
         let (embedder, _, quantized) = embedders
@@ -915,7 +916,7 @@ fn prepare_search<'t>(
                     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
 
                     embedder
-                        .embed_search(query.q.clone().unwrap(), Some(deadline))
+                        .embed_search(query.q.as_ref().unwrap(), Some(deadline))
                         .map_err(milli::vector::Error::from)
                         .map_err(milli::Error::from)?
                 }

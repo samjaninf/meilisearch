@@ -31,6 +31,7 @@ use super::new::StdResult;
 use crate::documents::{obkv_to_object, DocumentsBatchReader};
 use crate::error::{Error, InternalError};
 use crate::index::{PrefixSearch, PrefixSettings};
+use crate::progress::Progress;
 use crate::thread_pool_no_abort::ThreadPoolNoAbortBuilder;
 pub use crate::update::index_documents::helpers::CursorClonableMmap;
 use crate::update::{
@@ -520,7 +521,16 @@ where
 
             pool.install(|| {
                 let mut writer = ArroyWrapper::new(vector_arroy, embedder_index, was_quantized);
-                writer.build_and_quantize(wtxn, &mut rng, dimension, is_quantizing, cancel)?;
+                writer.build_and_quantize(
+                    wtxn,
+                    // In the settings we don't have any progress to share
+                    &Progress::default(),
+                    &mut rng,
+                    dimension,
+                    is_quantizing,
+                    self.indexer_config.max_memory,
+                    cancel,
+                )?;
                 Result::Ok(())
             })
             .map_err(InternalError::from)??;
@@ -2799,8 +2809,9 @@ mod tests {
             embedding_configs.pop().unwrap();
         insta::assert_snapshot!(embedder_name, @"manual");
         insta::assert_debug_snapshot!(user_provided, @"RoaringBitmap<[0, 1, 2]>");
-        let embedder =
-            std::sync::Arc::new(crate::vector::Embedder::new(embedder.embedder_options).unwrap());
+        let embedder = std::sync::Arc::new(
+            crate::vector::Embedder::new(embedder.embedder_options, 0).unwrap(),
+        );
         let res = index
             .search(&rtxn)
             .semantic(embedder_name, embedder, false, Some([0.0, 1.0, 2.0].to_vec()))
