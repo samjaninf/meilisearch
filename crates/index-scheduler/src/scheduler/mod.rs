@@ -21,6 +21,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 use meilisearch_types::error::ResponseError;
+use meilisearch_types::heed::{Env, WithoutTls};
 use meilisearch_types::milli;
 use meilisearch_types::tasks::Status;
 use rayon::current_num_threads;
@@ -71,10 +72,15 @@ pub struct Scheduler {
     pub(crate) snapshots_path: PathBuf,
 
     /// The path to the folder containing the auth LMDB env.
-    pub(crate) auth_path: PathBuf,
+    pub(crate) auth_env: Env<WithoutTls>,
 
     /// The path to the version file of Meilisearch.
     pub(crate) version_file_path: PathBuf,
+
+    /// The maximal number of entries in the search query cache of an embedder.
+    ///
+    /// 0 disables the cache.
+    pub(crate) embedding_cache_cap: usize,
 }
 
 impl Scheduler {
@@ -87,12 +93,13 @@ impl Scheduler {
             batched_tasks_size_limit: self.batched_tasks_size_limit,
             dumps_path: self.dumps_path.clone(),
             snapshots_path: self.snapshots_path.clone(),
-            auth_path: self.auth_path.clone(),
+            auth_env: self.auth_env.clone(),
             version_file_path: self.version_file_path.clone(),
+            embedding_cache_cap: self.embedding_cache_cap,
         }
     }
 
-    pub fn new(options: &IndexSchedulerOptions) -> Scheduler {
+    pub fn new(options: &IndexSchedulerOptions, auth_env: Env<WithoutTls>) -> Scheduler {
         Scheduler {
             must_stop_processing: MustStopProcessing::default(),
             // we want to start the loop right away in case meilisearch was ctrl+Ced while processing things
@@ -102,8 +109,9 @@ impl Scheduler {
             batched_tasks_size_limit: options.batched_tasks_size_limit,
             dumps_path: options.dumps_path.clone(),
             snapshots_path: options.snapshots_path.clone(),
-            auth_path: options.auth_path.clone(),
+            auth_env,
             version_file_path: options.version_file_path.clone(),
+            embedding_cache_cap: options.embedding_cache_cap,
         }
     }
 }

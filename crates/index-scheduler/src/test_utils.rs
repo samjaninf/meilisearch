@@ -5,6 +5,7 @@ use std::time::Duration;
 use big_s::S;
 use crossbeam_channel::RecvTimeoutError;
 use file_store::File;
+use meilisearch_auth::open_auth_store_env;
 use meilisearch_types::document_formats::DocumentFormatError;
 use meilisearch_types::milli::update::IndexDocumentsMethod::ReplaceDocuments;
 use meilisearch_types::milli::update::IndexerConfig;
@@ -111,6 +112,7 @@ impl IndexScheduler {
             batched_tasks_size_limit: u64::MAX,
             instance_features: Default::default(),
             auto_upgrade: true, // Don't cost much and will ensure the happy path works
+            embedding_cache_cap: 10,
         };
         let version = configuration(&mut options).unwrap_or_else(|| {
             (
@@ -120,7 +122,10 @@ impl IndexScheduler {
             )
         });
 
-        let index_scheduler = Self::new(options, version, sender, planned_failures).unwrap();
+        std::fs::create_dir_all(&options.auth_path).unwrap();
+        let auth_env = open_auth_store_env(&options.auth_path).unwrap();
+        let index_scheduler =
+            Self::new(options, auth_env, version, sender, planned_failures).unwrap();
 
         // To be 100% consistent between all test we're going to start the scheduler right now
         // and ensure it's in the expected starting state.
